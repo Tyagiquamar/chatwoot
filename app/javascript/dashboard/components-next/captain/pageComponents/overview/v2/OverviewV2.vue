@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useCaptain } from 'dashboard/composables/useCaptain';
+import { usePolicy } from 'dashboard/composables/usePolicy';
 import {
   isAbortError,
   useAbortableRequest,
@@ -24,10 +25,15 @@ import ResolutionTrendCard from './ResolutionTrendCard.vue';
 import CsatCard from './CsatCard.vue';
 import UsageCard from './UsageCard.vue';
 import KnowledgeCoverageCard from './KnowledgeCoverageCard.vue';
+import OverviewDrilldownDrawer from './OverviewDrilldownDrawer.vue';
+import { DRILLDOWN_METRICS } from './drilldownMetrics';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const { checkPermissions } = usePolicy();
+const canDrilldown = computed(() => checkPermissions(['administrator']));
+const selectedDrilldown = ref(null);
 const currentUser = useMapGetter('getCurrentUser');
 const { responseLimits, documentLimits, isFetchingLimits, fetchLimits } =
   useCaptain();
@@ -129,6 +135,7 @@ const fetchKnowledge = async () => {
 watch(
   [selectedRange, assistantId],
   () => {
+    selectedDrilldown.value = null;
     fetchReport();
     fetchSummary();
   },
@@ -210,6 +217,7 @@ const metricFor = ({
 
   return {
     key,
+    clickable: canDrilldown.value && Object.hasOwn(DRILLDOWN_METRICS, key),
     label,
     hint,
     hintNote,
@@ -255,6 +263,7 @@ const featuredMetrics = computed(() => {
   });
 
   if (DURABILITY_UNAVAILABLE_RANGES.includes(selectedRange.value)) {
+    durableMetric.clickable = false;
     durableMetric.value = '—';
     durableMetric.valueClass = 'text-n-slate-11';
     durableMetric.trend = '';
@@ -374,6 +383,7 @@ const reviewFaqs = () =>
           :metrics="metrics"
           :loading="isFetchingReport"
           :summary-loading="isFetchingSummary"
+          @metric-click="selectedDrilldown = $event"
         />
 
         <ResolutionFlowCard
@@ -411,6 +421,14 @@ const reviewFaqs = () =>
 
         <QuickLinks />
       </div>
+
+      <OverviewDrilldownDrawer
+        v-if="canDrilldown && selectedDrilldown"
+        :assistant-id="assistantId"
+        :metric="selectedDrilldown"
+        :range="selectedRange"
+        @close="selectedDrilldown = null"
+      />
     </template>
   </PageLayout>
 </template>
